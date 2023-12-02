@@ -46,34 +46,51 @@ int main(int argc, char **argv)
         return -1;
     }
 
-
-    static char response[] = 
-    "HTTP/1.1 200 OK\n"
-    "Content-Type: text/html\n"
-    "Content-Length: 10\n"
-    "\n"
-    "<h1>0</h1>";
-
     while (1)
     {
         int addr_len = sizeof(client_addr);
         SOCKET msg_sock = accept(sock, (struct sockaddr*)&client_addr, &addr_len);
-
-        response[sizeof(response)-7] = (0x30 + counter);
-        if(++counter > 9)
+        if(msg_sock == 0)
         {
-            counter = 0;
+            printf("illegal client?!\n");
+            continue;
         }
 
-        printf("send response! %d\n", counter);
+        FILE* fp = fopen("../html/index.html", "rb");
+        fseek(fp, 0, SEEK_END);
+        int file_size = ftell(fp);
+        fseek(fp, 0, SEEK_SET);
+        
+        char response_header[100];
+        int header_size = snprintf(response_header, sizeof(response_header),
+        "HTTP/1.1 200 OK\r\n" 
+        "Content-Type: text/html\r\n"
+        "Content-Length: %d\r\n\r\n", (file_size)
+        );
 
-        if(send(msg_sock, response, sizeof(response), 0) == 0)
+        printf("header size: %d\n", header_size);
+        printf("file size: %d\n", file_size);
+
+        int packet_size = (file_size + header_size);
+
+        printf("allocated size: %d\n", (sizeof(char) * packet_size));
+
+        char* response = (char*) malloc(sizeof(char) * packet_size);
+        memcpy(response, response_header, header_size);
+        for(int i=0; i<file_size; ++i)
         {
-            closesocket(msg_sock);
+            response[i + header_size] = fgetc(fp);
         }
 
-        // Sleep(10);
+        fclose(fp);
 
+        int res = 0;
+        send(msg_sock, response, (file_size + header_size), 0);
+
+        Sleep(1);
+
+        free(response);
+        closesocket(msg_sock);
     }
 
 }
